@@ -6,7 +6,7 @@
 
 
 
-After running `uv init`, several project files were created.  
+After running "uv init", several project files were created.  
 
 `pyproject.toml` contains the project information and dependencies.  
 
@@ -111,4 +111,13 @@ No. After checking out the previous Git commit and running `dvc checkout`, the `
 
 
 After switching back to `main` and running `dvc checkout` again, the processed folders came back. This shows that Git versions the DVC pointer while DVC restores the corresponding version of the data.
+
+
+## DagsHub upload workaround
+
+I had difficulties pushing the full Food-11 dataset to DagsHub because of the large data size and connection interruptions.
+
+I used solution 2 (Reduce the data folder size). I kept the same data structure but used a smaller number of images from each category. The full dataset was stored separately outside the Git repository.
+
+After reducing the dataset size, I was able to push the data successfully using DVC.
 
