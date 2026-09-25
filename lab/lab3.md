@@ -11,10 +11,10 @@ I loaded the model using `models:/food11@champion` because this lets MLflow hand
 I copied `pyproject.toml` and `uv.lock` first so Docker can install the dependencies in a separate cached layer. This is useful because the dependencies do not change every time I modify my code. For example, if I only change something in `serve.py`, Docker can reuse the dependency layer instead of installing everything again.
 
 ### Question 5
-From `docker history`, I noticed that the biggest part of my image is the virtual environment, which is around 1.43 GB. The source code itself is only around 49.2 kB. I used a multi-stage build so build-related things do not have to stay in the final image. I did not create a separate single-stage image, so I do not have an exact size comparison between the two.
+I used a multi-stage build so the final image only keeps what is needed to run the application. I did not create a single-stage image, so I can't give an exact size difference between the two. With `docker history`, I saw that the biggest layer in my image was the virtual environment, around 1.43 GB, while the source code was only about 49.2 kB. From this, I can see that most of the image size comes from the dependencies rather than my code.
 
 ### Question 6
-If I forget .dockerignore, Docker sends unnecessary files like data, .venv, mlruns and .git as part of the build context, which makes it larger and can slow down the build. Sending them to the Docker daemon does not necessarily break the build by itself, but copying my local .venv into the image could cause problems because it was created on Windows while the container runs Linux.
+If I don't use `.dockerignore`, Docker will also take files that I don't need, like `data`, `.venv`, `mlruns` and `.git`. This makes the build context bigger and the build can take longer. It can also make the image bigger if these files are copied into it. In my case, `.venv` can cause a problem because I created it on Windows, but the container is running Linux.
 
 ### Question 7
 I could not use `127.0.0.1:5000` from inside the container because localhost there refers to the container itself. My MLflow server was running on my Windows machine, so I used `host.docker.internal` to let the container reach the host machine.
