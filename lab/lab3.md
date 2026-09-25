@@ -2,7 +2,7 @@
 My model was registered as version 1. The logged model artifact belongs to one specific training run, while the registered model gives me a model name and a version that I can manage and reuse more easily.
 
 ### Question 2
-MLflow now uses aliases like `champion` and `challenger` instead of the old stages. Keeping model versions separately is useful because I can have several versions of the same model. The alias is also flexible because I can move `champion` to a newer version without changing the code that loads the model.
+MLflow now uses aliases like `champion` and `challenger` instead of the old `Staging` and `Production` stages. Having different model versions makes it easier to keep and manage the models I trained. The alias is useful because if I get a better model later, I can move `champion` to the new version without changing my serving code.
 
 ### Question 3
 I loaded the model using `models:/food11@champion` because this lets MLflow handle which model version should be used. If I loaded a `.pth` file directly, I would have to manage the file path myself. With the alias, if I get a better model later, I only need to assign `champion` to the new version and the serving code can stay the same.
@@ -23,4 +23,4 @@ I could not use `127.0.0.1:5000` from inside the container because localhost the
 I stopped the container and started a new one using the same `food11-api:latest` image without rebuilding it. The API worked again and both `/health` and `/predict` returned successful responses. This showed me that I do not need to rebuild the image every time I start a container. The application and its dependencies are in the image, while the model is loaded through MLflow at runtime. In my setup I also mounted `mlruns` so the container could access the local model artifacts.
 
 ### Question 9
-At this point the Dockerfile is saved in Git, but the Docker image is still on my computer. For another machine or a CI/Kubernetes environment to pull the exact same image, I would need to push it to a container registry, for example Docker Hub or GitHub Container Registry. I should also use a specific tag or digest so the exact image version can be identified.
+The Dockerfile is already saved in Git, but the Docker image is still only on my computer. If I want another machine or a CI/Kubernetes environment to use the same image, I need to push it to a container registry such as Docker Hub or GitHub Container Registry. I should also use a specific tag or digest to make sure the same image is used. Since my model is loaded from MLflow at runtime, the other machine also needs to be able to access the MLflow server and the model artifacts.
