@@ -1,14 +1,15 @@
-import os
 import io
+import os
+from typing import Annotated
 
-import mlflow
 import torch
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from PIL import Image
 from torchvision import transforms
 
-# Get the MLflow server address from the environment variable.
-# If it is not defined, use the local MLflow server.
+import mlflow
+from src.food11.data import CLASSES
+
 MLFLOW_TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI",
     "http://127.0.0.1:5000"
@@ -16,10 +17,20 @@ MLFLOW_TRACKING_URI = os.getenv(
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
-# Load the model registered in MLflow with the "champion" alias
-model = mlflow.pyfunc.load_model("models:/food11@champion")
-
 app = FastAPI()
+
+# Model is loaded when the application starts, not during import.
+model = None
+
+
+@app.on_event("startup")
+def load_model():
+    global model
+
+    if os.environ.get("SKIP_MODEL"):
+        return
+
+    model = mlflow.pyfunc.load_model("models:/food11@champion")
 
 
 @app.get("/health")
@@ -28,12 +39,16 @@ def health():
 
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-    # Read the uploaded image
+async def predict(file: Annotated[UploadFile, File()]):
+    if model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model is not loaded"
+        )
+
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert("RGB")
 
-    # Apply the same basic preprocessing used by ResNet18
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -45,16 +60,17 @@ async def predict(file: UploadFile = File(...)):
 
     image_tensor = transform(image).unsqueeze(0)
 
-    # Run prediction using the MLflow model
     prediction = model.predict(image_tensor.numpy())
 
     prediction_tensor = torch.tensor(prediction)
-
     probabilities = torch.softmax(prediction_tensor, dim=1)
 
     confidence, predicted_class = torch.max(probabilities, 1)
 
+    class_id = int(predicted_class.item())
+
     return {
-        "predicted_category": int(predicted_class.item()),
+        "predicted_category": class_id,
+        "category": CLASSES[class_id],
         "confidence": float(confidence.item())
     }
