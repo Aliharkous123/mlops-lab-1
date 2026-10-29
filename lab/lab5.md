@@ -6,7 +6,7 @@
 
 
 
-In this lab, I worked on the CI/CD part of my Food11 project. The goal was to automate the tests using GitHub Actions instead of checking everything manually each time.
+In this lab, I added CI/CD to my Food11 project. I used GitHub Actions to run tests automatically.
 
 
 
@@ -18,15 +18,15 @@ I also worked on data validation, Docker testing and model promotion with MLflow
 
 
 
-I started by modifying `data.py`. I separated some parts of the preprocessing code into functions so I could test them without running the whole script.
+I started by modifying `data.py`. I separated the preprocessing code into functions to make testing easier.
 
 
 
-I also changed `serve.py` to make it possible to start the API without loading the trained model. I used `SKIP\_MODEL=1` for that.
+I also changed `serve.py` so the API can start without loading the model. For this, I used `SKIP\_MODEL=1`.
 
 
 
-After these changes, I wrote tests for the data functions and the API.
+Then I wrote tests for the data functions and the API.
 
 
 
@@ -38,11 +38,15 @@ I ran:
 
 
 
-The result was \*\*5 passed, 4 warnings\*\*. The warnings were related to deprecated functions, but they did not cause the tests to fail.
+Result: \*\*5 passed, 4 warnings\*\*.
 
 
 
-I also ran Ruff to check the code:
+The warnings were related to deprecated functions. They did not affect the tests.
+
+
+
+I also checked the code with Ruff:
 
 
 
@@ -50,11 +54,15 @@ I also ran Ruff to check the code:
 
 
 
-Ruff found an import-order problem in `promote.py`. I fixed it using `ruff check src tests --fix`, then ran the check again.
+Ruff found an import-order error in `promote.py`. I fixed it using:
 
 
 
-This time I got `All checks passed!`.
+`uv run --no-sync ruff check src tests --fix`
+
+
+
+I ran Ruff again and got `All checks passed!`.
 
 
 
@@ -62,23 +70,35 @@ This time I got `All checks passed!`.
 
 
 
-I wrote `validate\_data.py` to check the Food11 dataset before training.
+I created `validate\_data.py` to check the dataset before training.
 
 
 
-The script checks if all 11 classes are present in each split, if the images are RGB with size 128×128, and if each class has enough images. It also checks for duplicate images and compares the class distribution between training and validation.
+The script checks five things:
 
 
 
-I ran the script on the mini dataset with a minimum of 20 images per class.
+1\. All 11 classes are present in each split.
+
+2\. Images are RGB and have a size of 128×128.
+
+3\. Each class has enough images.
+
+4\. There are no duplicate images between splits.
+
+5\. The class distribution is balanced.
 
 
 
-Four checks passed, but one failed because I had duplicate images between the validation and evaluation folders.
+I tested the mini dataset with a minimum of 20 images per class.
 
 
 
-The duplicate pairs were:
+Four checks passed, but the duplicate check failed.
+
+
+
+I found two duplicate pairs:
 
 
 
@@ -88,11 +108,11 @@ The duplicate pairs were:
 
 
 
-I did not expect this problem because the images were in different splits. It showed me that checking the dataset is important before training, especially to avoid having the same image in more than one split.
+I did not expect to find duplicates between the splits. This showed me why data validation is important.
 
 
 
-These duplicates still need to be fixed.
+The duplicates still need to be fixed.
 
 
 
@@ -100,19 +120,19 @@ These duplicates still need to be fixed.
 
 
 
-For the Docker part, I built the image and started a container with `SKIP\_MODEL=1`.
+I built the Docker image and started the API with `SKIP\_MODEL=1`.
 
 
 
-I used this option because the goal was just to check if the API starts correctly, without loading the trained model.
+This allowed me to test the API without loading the trained model.
 
 
 
-After starting the container, I tested the `/health` endpoint.
+Then I tested the `/health` endpoint.
 
 
 
-I got:
+Result:
 
 
 
@@ -120,11 +140,11 @@ I got:
 
 
 
-I had a small problem at first because curl returned an empty reply on Windows. I tried again using `--noproxy` and IPv4, and the request worked.
+At first, curl returned an empty reply on Windows. I tried again with `--noproxy` and IPv4, and it worked.
 
 
 
-So the Docker image was built successfully and the API was running.
+The API was running correctly inside Docker.
 
 
 
@@ -132,27 +152,23 @@ So the Docker image was built successfully and the API was running.
 
 
 
-I created the workflow file `.github/workflows/ci.yml`.
+I created `.github/workflows/ci.yml` to automate the checks.
 
 
 
-I divided the pipeline into three jobs.
+The workflow has three jobs:
 
 
 
-The first job, `test`, installs the dependencies and runs Ruff and pytest.
+\- \*\*test:\*\* installs dependencies and runs Ruff and pytest.
+
+\- \*\*smoke:\*\* builds Docker, starts the API and checks `/health`.
+
+\- \*\*push:\*\* publishes the Docker image to GHCR after a successful push to `main`.
 
 
 
-The second job, `smoke`, builds the Docker image, starts the container and checks the `/health` endpoint.
-
-
-
-The last job, `push`, publishes the Docker image to GitHub Container Registry, but only for pushes to the `main` branch after the previous jobs pass.
-
-
-
-The pipeline looks like this:
+The pipeline is:
 
 
 
@@ -160,11 +176,73 @@ The pipeline looks like this:
 
 
 
-I used the Git commit SHA as the Docker image tag so that each image can be linked to a specific version of the code.
+I used the Git commit SHA to tag the Docker image.
 
 
 
-For now, I tested Ruff, pytest and Docker locally. I still need to check the complete workflow on GitHub Actions.
+I pushed my changes using the branch `feature/lab5-ci-cd`.
+
+
+
+GitHub Actions started automatically. Both `test` and `smoke` passed.
+
+
+
+\### Pull Request and Branch Protection
+
+
+
+I opened Pull Request #1 from `feature/lab5-ci-cd` to `main`.
+
+
+
+I created a branch protection ruleset called `Protect main branch`.
+
+
+
+I enabled the Pull Request requirement and added `test` and `smoke` as required checks.
+
+
+
+This means the checks must pass before merging.
+
+
+
+\### Testing a CI Failure
+
+
+
+I added a temporary failing test:
+
+
+
+```python
+
+def test\_ci\_failure():
+
+&#x20;   assert 1 == 2
+
+```
+
+
+
+I committed and pushed the test to GitHub.
+
+
+
+GitHub Actions detected the error. The `test` job failed, and `smoke` was skipped.
+
+
+
+Then I removed the failing test and pushed again.
+
+
+
+This time, both jobs passed on the push and Pull Request workflows.
+
+
+
+I saw how CI can detect errors before merging.
 
 
 
@@ -172,15 +250,15 @@ For now, I tested Ruff, pytest and Docker locally. I still need to check the com
 
 
 
-For model promotion, I used models that I had already trained in the previous labs.
+I used two models from my previous labs.
 
 
 
-I had version 1 registered as champion, and I registered another trained model as version 2 to test the promotion process.
+Version 1 was the champion. I registered another model as version 2 to test the promotion.
 
 
 
-The results were:
+My results were:
 
 
 
@@ -194,11 +272,11 @@ The results were:
 
 
 
-I created `promote.py` to decide if the candidate should replace the champion.
+I created `promote.py` to compare the models.
 
 
 
-The rule was to compare the candidate accuracy with the champion accuracy plus two standard errors.
+The candidate must reach the champion accuracy plus two standard errors.
 
 
 
@@ -218,7 +296,7 @@ I used 220 test images.
 
 
 
-I got these results:
+The results were:
 
 
 
@@ -232,7 +310,7 @@ I got these results:
 
 
 
-Since the candidate accuracy was below 71%, it was not promoted.
+The candidate did not reach the threshold.
 
 
 
@@ -244,7 +322,7 @@ The script returned:
 
 
 
-I checked the aliases in MLflow and got:
+I checked MLflow and got:
 
 
 
@@ -252,7 +330,11 @@ I checked the aliases in MLflow and got:
 
 
 
-So version 1 stayed champion and version 2 became challenger. I also checked that the decision and both accuracy values were saved as tags in MLflow.
+Version 1 stayed champion, and version 2 became challenger.
+
+
+
+I also checked that MLflow saved the decision and accuracy values as tags.
 
 
 
@@ -260,19 +342,19 @@ So version 1 stayed champion and version 2 became challenger. I also checked tha
 
 
 
-The main difference between CI/CD and model promotion is what they check.
+CI/CD checks the code and the application. Model promotion checks if a new model is better than the current one.
 
 
 
-CI/CD checks the code and makes sure the application can run correctly. Model promotion checks the performance of the trained model.
+Even if the code passes all tests, the model may still have lower accuracy.
 
 
 
-For example, my candidate model could be used in an application that passes all the code tests, but that does not mean the model is better than the champion.
+The Git commit SHA identifies the Docker image version. MLflow uses model versions and aliases.
 
 
 
-I also understood why the code version and model version are different. The Git commit SHA identifies the code used for the Docker image, while MLflow keeps track of the trained models using versions and aliases.
+I also tested branch protection. When I added a failing test, GitHub Actions detected it. After removing the test, the checks passed again.
 
 
 
@@ -280,17 +362,21 @@ I also understood why the code version and model version are different. The Git 
 
 
 
-In this lab, I added tests, data validation, Docker checks and model promotion to my Food11 project.
+In this lab, I added automated tests, data validation, Docker checks and model promotion.
 
 
 
-The five tests passed, Ruff found no remaining errors, and the Docker API returned HTTP 200.
+The five tests passed. Ruff also passed, and the Docker API returned HTTP 200.
 
 
 
-The MLflow promotion script also worked. It kept version 1 as champion because the candidate did not reach the required accuracy.
+I tested GitHub Actions with a Pull Request. The pipeline detected a failing test and passed again after I removed it.
 
 
 
-The main problem I found was the duplicate images in the dataset. I still need to fix them and finish testing the GitHub Actions workflow through a Pull Request.
+MLflow kept version 1 as champion because version 2 had lower accuracy.
+
+
+
+I still need to fix the duplicate images and merge the Pull Request.
 
