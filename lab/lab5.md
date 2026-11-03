@@ -224,179 +224,133 @@ The second model performed better than the first one. However, its accuracy was 
 
 ## 7. Lab Questions and Answers
 
-### Question 1 — Why is it a bad idea for a unit test to load the real model from MLflow?
+### Question 1
+**Why is it a bad idea for a unit test to load the real model from your MLflow server? List at least two ways the test could fail even though your code is correct.**
 
-Loading the real model takes time.
+Loading the real model is slow and needs the MLflow server to be running. The test could fail if the server is offline or if there is a connection problem. It could also fail if the model file is missing, even when my code is correct. This is why I used a fake model for testing.
 
-The test may fail if the MLflow server is offline or the model file is missing.
+### Question 2
+**The fake model always answers "Bread" with 0.90 confidence. What exactly does `test_predict_returns_valid_json` prove, and what does it *not* prove?**
 
-The code could be correct, but the test would still fail.
+This test checks that the API can receive an image and return a JSON response with the right information. It checks that the category is Bread and that the confidence is between 0 and 1. It does not tell us if the real model is accurate or if it can predict other food classes correctly.
 
-Using a fake model makes testing faster and easier.
+### Question 3
+**Which check caught it? Why is a train/test duplicate more dangerous than a corrupted image, even though the corrupted image makes the training script crash and the duplicate does not?**
 
-### Question 2 — What does the fake model test prove?
+The duplicate check found the copied image by comparing MD5 hashes between the dataset splits.
 
-It checks if the API can receive an image and return valid JSON.
+A duplicate between training and testing is a problem because the model may have already seen that image. This can make the accuracy look better than it really is. A corrupted image usually gives an error, but a duplicate can stay in the dataset without anyone noticing.
 
-It also checks that the category is Bread and the confidence is between 0 and 1.
+### Question 4
+**Your CI runner cannot see your data (it is in DVC, and maybe in a local remote). Where in your workflow should `validate_data.py` run so that it still protects you? Give two places.**
 
-It does not prove that the real model is accurate or makes correct predictions.
+I can run `validate_data.py` on my computer before training because I have the dataset locally. I can also run it on a self-hosted runner that has access to the DVC data. This way, the dataset is checked before starting training.
 
-### Question 3 — Which check detects duplicates? Why are they dangerous?
+### Question 5
+**The `smoke` job has `needs: test`. What happens to it if a unit test fails? What would happen without `needs`?**
 
-The duplicate check detects the same image in different splits. It compares file hashes.
+If a unit test fails, the smoke job is skipped because it depends on the test job. Without `needs: test`, the smoke job could still run even if the tests failed.
 
-A train/test duplicate is dangerous because the model may have already seen the image during training.
+### Question 6
+**How long did the whole run take? Run it a second time (push an empty commit with `git commit --allow-empty -m "ci"`) and compare. Which step got faster, and why?**
 
-This can make the test accuracy look higher than it really is.
+The first successful workflow on `main` took 6 minutes and 12 seconds.
 
-A corrupted image usually causes an error. A duplicate may go unnoticed.
+I ran the workflow again using an empty commit. The second run took 2 minutes and 7 seconds.
 
-### Question 4 — Where should data validation run if GitHub Actions cannot access the dataset?
+The test job became a little faster, going from 31 seconds to 27 seconds. Dependency installation took 4 seconds in the second run. Caching may have helped by reusing dependencies.
 
-It can run locally before training.
+The second workflow was also shorter because the push job did not run on the feature branch.
 
-It can also run in a data pipeline or on a runner that has access to the DVC dataset.
+### Question 7
+**This answers Question 9 of Lab 3. Why tag with the commit SHA rather than `latest`? Describe a concrete situation where `latest` leads two machines to run different code.**
 
-Both options help detect problems before training.
+The commit SHA tells us exactly which code version was used to build the Docker image.
 
-### Question 5 — What happens if a unit test fails?
+For example, if I download an image tagged `latest` today and someone updates it tomorrow, another computer downloading `latest` could get different code. Using the commit SHA avoids this because each image has a specific version.
 
-The `smoke` job depends on `test` using `needs: test`.
+### Question 8
+**Why does the `push` job declare `permissions:` explicitly? What could a compromised step do with a token that had write access to everything in the repo?**
 
-If a unit test fails, `smoke` is skipped.
+The push job needs permission to upload the Docker image to GHCR. I used `contents: read` and `packages: write` so the token only has the permissions needed for this job.
 
-Without `needs`, both jobs could run independently.
+If a compromised step had full access, it could change repository files, modify workflows or publish unwanted packages.
 
-The Docker build might continue even if the tests fail.
+### Question 9
+**What does the pull request page show? Could you still merge? What does that change for a team compared to "everybody runs the tests on their laptop before pushing"?**
 
-### Question 6 — How long did the workflow take? Which step got faster, and why?
+When I added a failing test, GitHub showed a red failed check. The test job failed, and the smoke job was skipped.
 
-My first successful workflow on `main` took 6 minutes and 12 seconds.
+The required checks were not passing, so the Pull Request was not ready to merge. After fixing the test, both checks passed and I merged it.
 
-I ran the workflow again using an empty commit. It took 2 minutes and 7 seconds.
+For a team, this is useful because GitHub runs the same checks automatically. We do not have to depend only on each person remembering to test the code on their laptop.
 
-The `test` job went from 31 seconds to 27 seconds.
+### Question 10
+**For each candidate, what did the gate decide, and with which numbers? With your test-set size, how many accuracy points does `2 * se` represent?**
 
-Dependency installation took 4 seconds in the second run.
-
-Caching may have helped by reusing dependencies.
-
-The total time was also shorter because the `push` job was skipped on the feature branch.
-
-### Question 7 — Why use the commit SHA instead of `latest`?
-
-The commit SHA identifies the exact code version.
-
-The `latest` tag can change.
-
-For example, one computer downloads `latest` on Monday. Another downloads it on Tuesday after a new release.
-
-They might get different code.
-
-Using the commit SHA avoids this problem.
-
-### Question 8 — Why does the push job declare permissions?
-
-The job needs permission to publish the Docker image to GHCR.
-
-I used `contents: read` and `packages: write`.
-
-This limits what the GitHub token can do.
-
-If a compromised step had too many permissions, it could modify files, change workflows or publish unwanted packages.
-
-### Question 9 — What happened when the test failed in the Pull Request?
-
-GitHub showed a red failed check.
-
-The `test` job failed, and `smoke` was skipped.
-
-I configured branch protection to require passing checks before merging.
-
-This helps teams detect problems automatically instead of depending only on local testing.
-
-After removing the failing test, all checks passed.
-
-I then merged the Pull Request.
-
-### Question 10 — What did the promotion gate decide?
-
-I trained two new models with different learning rates.
-
-I registered them as versions 4 and 5.
-
-I used 220 test images.
+I trained two new models using different learning rates and registered them in MLflow as versions 4 and 5. I used 220 images for testing.
 
 | Model | Learning rate | Test accuracy | Decision |
 |---|---|---:|---|
-| Champion v1 | 0.0001 | 64.55% | Remained champion |
+| Champion v1 | 0.0001 | 64.55% | Stayed champion |
 | Candidate v4 | 0.00001 | 8.64% | Failed |
 | Candidate v5 | 0.0001 | 21.82% | Failed |
 
-The standard error was 3.23%.
+The standard error was about 3.23%, so `2 * se` represents about 6.45 percentage points.
 
-Two standard errors represent about 6.45 percentage points.
+The candidate needed at least 71.00% accuracy to replace the champion. Both candidates were below this value, so version 1 stayed champion. Version 5 became challenger because I tested it last.
 
-The promotion threshold was 71.00%.
+### Question 11
+**`promote.py` needs to reach your MLflow server, so it cannot run in GitHub's cloud runners while MLflow lives on your laptop. Name two ways to make it run automatically after training. (Hint: DagsHub also offers a hosted MLflow server per repository.)**
 
-Both candidates failed the gate.
+One way is to use a hosted MLflow server like DagsHub. GitHub Actions could access it and run `promote.py` after training.
 
-Version 1 stayed champion, and version 5 became challenger.
+Another way is to use a self-hosted runner that can connect to my local MLflow server. Both options would let the promotion script run automatically.
 
-### Question 11 — How can model promotion run automatically?
-
-One solution is to use a hosted MLflow server, such as DagsHub.
-
-GitHub Actions could access it after training.
-
-Another solution is to use a self-hosted runner that can access the local MLflow server.
-
-Both solutions can run `promote.py` automatically after training.
-
-### Question 12 — Draw the complete pipeline.
+### Question 12
+**Draw (in `lab/lab5.md`) the pipeline you now have, from `git push` to a running container. Mark which steps are automatic, which still need a human, and where the code version and the model version are decided.**
 
 ```text
-Developer changes code             [Human]
+Developer writes code                 [Manual]
           |
           v
-Git push / Pull Request             [Human]
+Git push / Pull Request               [Manual]
           |
           v
-GitHub Actions starts               [Automatic]
+GitHub Actions starts                 [Automatic]
           |
           v
-Ruff + pytest                       [Automatic]
+Ruff + pytest                         [Automatic]
           |
           v
-Docker build + smoke test           [Automatic]
+Docker build + smoke test             [Automatic]
           |
           v
-Review and merge Pull Request       [Human]
+Review and merge Pull Request         [Manual]
           |
           v
-GitHub Actions runs on main         [Automatic]
+GitHub Actions runs on main           [Automatic]
           |
           v
-Build and publish image to GHCR     [Automatic]
+Build and push image to GHCR          [Automatic]
           |
           v
-Image tagged with Git commit SHA    [Automatic]
+Image tagged with Git commit SHA      [Automatic]
           |
           v
-Pull and deploy the image           [Human]
+Pull and run Docker image             [Manual]
           |
           v
 Running container
 ```
 
-The Git commit SHA identifies the code version.
+The code version is identified by the Git commit SHA used for the Docker image.
 
-The model version is selected separately in MLflow using the `champion` alias.
+The model version is managed separately in MLflow using the `champion` alias.
 
-I ran model promotion manually with `promote.py`. The script checks accuracy and updates the alias.
+I ran `promote.py` manually to compare the candidate models with the champion. Both candidates failed the quality gate, so version 1 stayed champion.
 
-The CI smoke test starts a test container automatically. The final deployment is still a separate manual step.
+The smoke test runs a temporary container automatically, but running the final published image is still a manual step.
 
 ## 8. What I Understood
 
